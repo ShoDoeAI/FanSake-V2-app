@@ -1,7 +1,7 @@
 {
-  "name": "music-discovery-backend",
+  "name": "musicconnect-backend",
   "version": "1.0.0",
-  "description": "Backend API for Music Discovery MVP - Social platform for independent artists and fan communities",
+  "description": "Backend API for MusicConnect - Social platform connecting independent artists with fan communities",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

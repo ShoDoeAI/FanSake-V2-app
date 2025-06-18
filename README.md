@@ -1,6 +1,8 @@
-# 🎵 Music Discovery MVP
+# 🎵 MusicConnect
 
-A full-stack social platform for independent artists and fan communities, featuring music discovery, fan monetization, and community engagement.
+**A comprehensive social platform connecting independent artists with their fan communities**
+
+MusicConnect is a full-stack web application that empowers independent artists to monetize their content through tiered fan subscriptions while providing music lovers with exclusive access to their favorite artists' content. Think Patreon meets Spotify for the indie music scene.
 
 ## 🚀 Features
 
@@ -66,7 +68,7 @@ A full-stack social platform for independent artists and fan communities, featur
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd music-discovery-mvp
+   cd MusicConnect
    ```
 
 2. **Install Backend Dependencies**
@@ -112,7 +114,7 @@ A full-stack social platform for independent artists and fan communities, featur
 ## 📁 Project Structure
 
 ```
-music-discovery-mvp/
+MusicConnect/
 ├── frontend/                 # React frontend application
 │   ├── src/
 │   │   ├── components/      # Reusable UI components

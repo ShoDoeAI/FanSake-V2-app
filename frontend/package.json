@@ -1,7 +1,7 @@
 {
-  "name": "music-discovery-frontend",
+  "name": "musicconnect-frontend",
   "version": "1.0.0",
-  "description": "Frontend for Music Discovery MVP - Social platform for independent artists and fan communities",
+  "description": "Frontend for MusicConnect - Social platform connecting independent artists with fan communities",
   "private": true,
   "scripts": {
     "start": "react-scripts start",
