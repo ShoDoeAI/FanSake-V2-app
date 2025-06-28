@@ -4,6 +4,7 @@ import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext';
 import { AuthContextAdapter } from './contexts/AuthContextAdapter';
 import Loading from './components/ui/Loading';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Eager load critical components
 import Navbar from './components/Navbar';
@@ -29,13 +30,16 @@ const PageLoader = () => (
 
 function App() {
   return (
-    <Router>
-      <SupabaseAuthProvider>
-        <AuthContextAdapter>
-          <div className="min-h-screen">
-            <Navbar />
-            <main>
+    <ErrorBoundary>
+      <Router>
+        <SupabaseAuthProvider>
+          <AuthContextAdapter>
+            <div className="min-h-screen">
               <Suspense fallback={<PageLoader />}>
+                <Navbar />
+              </Suspense>
+              <main>
+                <Suspense fallback={<PageLoader />}>
               <Routes>
                 {/* Public Routes */}
                 <Route path="/" element={<Home />} />
@@ -74,10 +78,11 @@ function App() {
               </Routes>
             </Suspense>
           </main>
-          </div>
-        </AuthContextAdapter>
-      </SupabaseAuthProvider>
-    </Router>
+            </div>
+          </AuthContextAdapter>
+        </SupabaseAuthProvider>
+      </Router>
+    </ErrorBoundary>
   );
 }
 
