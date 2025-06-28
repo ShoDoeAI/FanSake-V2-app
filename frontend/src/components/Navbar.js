@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useSafeAuth } from '../hooks/useSafeAuth';
+import { useAuth } from '../contexts/SupabaseAuthContext';
 import { 
   HomeIcon, 
   MagnifyingGlassIcon, 
@@ -13,7 +13,10 @@ import {
 import Button from './ui/Button';
 
 const Navbar = () => {
-  const { isAuthenticated, user, logout, isArtist, isFan } = useSafeAuth();
+  const { user, signOut } = useAuth();
+  const isAuthenticated = !!user;
+  const isArtist = () => user?.user_metadata?.userType === 'artist';
+  const isFan = () => !user || user?.user_metadata?.userType === 'fan';
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -39,7 +42,7 @@ const Navbar = () => {
     : publicNavItems;
 
   const handleLogout = () => {
-    logout();
+    signOut();
     setIsMobileMenuOpen(false);
   };
 

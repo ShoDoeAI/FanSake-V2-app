@@ -1,7 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext';
-import { AuthContextAdapter } from './contexts/AuthContextAdapter';
 import Loading from './components/ui/Loading';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -31,8 +30,7 @@ function App() {
     <ErrorBoundary>
       <Router>
         <SupabaseAuthProvider>
-          <AuthContextAdapter>
-            <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<PageLoader />}>
               <div className="min-h-screen">
                 <Navbar />
                 <main>
@@ -75,7 +73,6 @@ function App() {
                 </main>
               </div>
             </Suspense>
-          </AuthContextAdapter>
         </SupabaseAuthProvider>
       </Router>
     </ErrorBoundary>

@@ -1,13 +1,14 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useSafeAuth } from '../hooks/useSafeAuth';
+import { useAuth } from '../contexts/SupabaseAuthContext';
 import Loading from './ui/Loading';
 
 const ProtectedRoute = ({ children, userType }) => {
-  const { isAuthenticated, user, isLoading } = useSafeAuth();
+  const { user, loading } = useAuth();
+  const isAuthenticated = !!user;
   const location = useLocation();
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loading size="lg" text="Checking authentication..." />
@@ -21,9 +22,9 @@ const ProtectedRoute = ({ children, userType }) => {
   }
 
   // Check user type if specified
-  if (userType && user?.userType !== userType) {
+  if (userType && user?.user_metadata?.userType !== userType) {
     // Redirect to appropriate dashboard based on user type
-    const redirectPath = user?.userType === 'artist' ? '/artist-dashboard' : '/fan-dashboard';
+    const redirectPath = user?.user_metadata?.userType === 'artist' ? '/artist-dashboard' : '/fan-dashboard';
     return <Navigate to={redirectPath} replace />;
   }
 
