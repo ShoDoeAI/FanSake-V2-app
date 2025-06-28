@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContextAdapter';
+import { useSafeAuth } from '../hooks/useSafeAuth';
 import { 
   HomeIcon, 
   MagnifyingGlassIcon, 
@@ -13,7 +13,7 @@ import {
 import Button from './ui/Button';
 
 const Navbar = () => {
-  const { isAuthenticated, user, logout, isArtist, isFan } = useAuth();
+  const { isAuthenticated, user, logout, isArtist, isFan } = useSafeAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 

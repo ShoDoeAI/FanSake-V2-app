@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/SupabaseAuthContext';
+import { useSafeAuth } from '../hooks/useSafeAuth';
+import { useAuth as useSupabaseAuth } from '../contexts/SupabaseAuthContext';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 
 const SupabaseLogin = () => {
-  const { user, loading, error, signIn } = useAuth();
+  const { user, loading, error, signIn } = useSupabaseAuth();
   const navigate = useNavigate();
   const location = useLocation();
   

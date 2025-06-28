@@ -1,10 +1,10 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContextAdapter';
+import { useSafeAuth } from '../hooks/useSafeAuth';
 import Loading from './ui/Loading';
 
 const ProtectedRoute = ({ children, userType }) => {
-  const { isAuthenticated, user, isLoading } = useAuth();
+  const { isAuthenticated, user, isLoading } = useSafeAuth();
   const location = useLocation();
 
   if (isLoading) {
