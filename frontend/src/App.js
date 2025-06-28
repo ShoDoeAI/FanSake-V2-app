@@ -1,35 +1,17 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-
-// Simple test component
-const TestLogin = () => {
-  return (
-    <div style={{ padding: '20px' }}>
-      <h1>FanSake Login</h1>
-      <p>If you can see this, the app is working!</p>
-      <Link to="/">Go to Home</Link>
-    </div>
-  );
-};
-
-const Home = () => {
-  return (
-    <div style={{ padding: '20px' }}>
-      <h1>FanSake Home</h1>
-      <p>Welcome to FanSake!</p>
-      <Link to="/login">Go to Login</Link>
-    </div>
-  );
-};
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<TestLogin />} />
-      </Routes>
-    </Router>
+    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+      <h1>FanSake App</h1>
+      <p>Build Time: {new Date().toISOString()}</p>
+      <p>If you see this, React is working!</p>
+      <hr />
+      <h2>Debug Info:</h2>
+      <p>No auth providers loaded</p>
+      <p>No routing loaded</p>
+      <p>Just plain React</p>
+    </div>
   );
 }
 
