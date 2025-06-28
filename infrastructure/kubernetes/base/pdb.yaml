@@ -1,0 +1,50 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: musicconnect-backend-pdb
+  namespace: musicconnect
+  labels:
+    app: musicconnect-backend
+    app.kubernetes.io/name: musicconnect-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: musicconnect
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: musicconnect-backend
+  unhealthyPodEvictionPolicy: AlwaysAllow
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: musicconnect-frontend-pdb
+  namespace: musicconnect
+  labels:
+    app: musicconnect-frontend
+    app.kubernetes.io/name: musicconnect-frontend
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: musicconnect
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: musicconnect-frontend
+  unhealthyPodEvictionPolicy: AlwaysAllow
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: musicconnect-websocket-pdb
+  namespace: musicconnect
+  labels:
+    app: musicconnect-websocket
+    app.kubernetes.io/name: musicconnect-websocket
+    app.kubernetes.io/component: websocket
+    app.kubernetes.io/part-of: musicconnect
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: musicconnect-websocket
+  unhealthyPodEvictionPolicy: AlwaysAllow

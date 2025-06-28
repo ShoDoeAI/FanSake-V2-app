@@ -1,0 +1,67 @@
+tempo:
+  retention: 720h # 30 days
+  
+  ingester:
+    trace_idle_period: 10s
+    max_block_bytes: 1_000_000
+    max_block_duration: 5m
+    
+  compactor:
+    compaction:
+      compaction_window: 1h
+      max_block_bytes: 100_000_000
+      block_retention: 720h
+      compacted_block_retention: 1h
+      
+  storage:
+    trace:
+      backend: s3
+      s3:
+        bucket: musicconnect-tempo-traces
+        endpoint: s3.us-east-1.amazonaws.com
+        region: us-east-1
+        access_key: ${AWS_ACCESS_KEY_ID}
+        secret_key: ${AWS_SECRET_ACCESS_KEY}
+      
+  querier:
+    max_concurrent_queries: 20
+    
+  query_frontend:
+    max_retries: 3
+    
+  global_overrides:
+    max_traces_per_user: 100000
+    max_bytes_per_trace: 5000000
+    
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+
+distributor:
+  receivers:
+    jaeger:
+      protocols:
+        thrift_http:
+          endpoint: 0.0.0.0:14268
+        grpc:
+          endpoint: 0.0.0.0:14250
+        thrift_binary:
+          endpoint: 0.0.0.0:6831
+        thrift_compact:
+          endpoint: 0.0.0.0:6832
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+    zipkin:
+      endpoint: 0.0.0.0:9411
+
+serviceMonitor:
+  enabled: true
+  interval: 30s

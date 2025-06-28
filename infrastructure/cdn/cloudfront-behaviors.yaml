@@ -1,0 +1,280 @@
+# CloudFront Cache Behaviors Configuration
+# Optimized for MusicConnect's multi-region deployment
+
+behaviors:
+  # Static assets with long cache
+  - path_pattern: "*.jpg"
+    target_origin: s3-static
+    cache_policy:
+      default_ttl: 86400      # 1 day
+      max_ttl: 31536000       # 1 year
+      min_ttl: 0
+    compress: true
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD]
+    cached_methods: [GET, HEAD]
+    smooth_streaming: false
+    lambda_functions:
+      - event_type: viewer-response
+        include_body: false
+
+  - path_pattern: "*.png"
+    target_origin: s3-static
+    cache_policy:
+      default_ttl: 86400
+      max_ttl: 31536000
+      min_ttl: 0
+    compress: true
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD]
+    cached_methods: [GET, HEAD]
+
+  - path_pattern: "*.gif"
+    target_origin: s3-static
+    cache_policy:
+      default_ttl: 86400
+      max_ttl: 31536000
+      min_ttl: 0
+    compress: true
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD]
+    cached_methods: [GET, HEAD]
+
+  - path_pattern: "*.css"
+    target_origin: s3-static
+    cache_policy:
+      default_ttl: 86400
+      max_ttl: 31536000
+      min_ttl: 0
+    compress: true
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD, OPTIONS]
+    cached_methods: [GET, HEAD, OPTIONS]
+    headers_to_forward: [Origin, Access-Control-Request-Method, Access-Control-Request-Headers]
+
+  - path_pattern: "*.js"
+    target_origin: s3-static
+    cache_policy:
+      default_ttl: 86400
+      max_ttl: 31536000
+      min_ttl: 0
+    compress: true
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD, OPTIONS]
+    cached_methods: [GET, HEAD, OPTIONS]
+    headers_to_forward: [Origin, Access-Control-Request-Method, Access-Control-Request-Headers]
+
+  # Audio/Video streaming with adaptive bitrate
+  - path_pattern: "*.m3u8"
+    target_origin: s3-media
+    cache_policy:
+      default_ttl: 300        # 5 minutes for manifest files
+      max_ttl: 300
+      min_ttl: 0
+    compress: false
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD]
+    cached_methods: [GET, HEAD]
+    smooth_streaming: true
+    trusted_signers: self
+
+  - path_pattern: "*.ts"
+    target_origin: s3-media
+    cache_policy:
+      default_ttl: 86400      # 1 day for video segments
+      max_ttl: 31536000
+      min_ttl: 3600
+    compress: false
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD]
+    cached_methods: [GET, HEAD]
+    smooth_streaming: true
+    trusted_signers: self
+
+  - path_pattern: "*.mp4"
+    target_origin: s3-media
+    cache_policy:
+      default_ttl: 86400
+      max_ttl: 31536000
+      min_ttl: 3600
+    compress: false
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD, OPTIONS]
+    cached_methods: [GET, HEAD]
+    range_requests: true
+    lambda_functions:
+      - event_type: viewer-request
+        include_body: false
+
+  - path_pattern: "*.mp3"
+    target_origin: s3-media
+    cache_policy:
+      default_ttl: 86400
+      max_ttl: 31536000
+      min_ttl: 3600
+    compress: false
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD, OPTIONS]
+    cached_methods: [GET, HEAD]
+    range_requests: true
+
+  # API endpoints with intelligent routing
+  - path_pattern: "/api/*"
+    target_origin: alb-primary
+    cache_policy:
+      default_ttl: 0
+      max_ttl: 0
+      min_ttl: 0
+    compress: true
+    viewer_protocol_policy: https-only
+    allowed_methods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+    cached_methods: [GET, HEAD, OPTIONS]
+    headers_to_forward: ["*"]
+    query_string: true
+    cookies: all
+    lambda_functions:
+      - event_type: origin-request
+        include_body: true
+      - event_type: origin-response
+        include_body: false
+
+  # WebSocket connections
+  - path_pattern: "/ws/*"
+    target_origin: nlb-websocket
+    cache_policy:
+      default_ttl: 0
+      max_ttl: 0
+      min_ttl: 0
+    compress: false
+    viewer_protocol_policy: https-only
+    allowed_methods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+    headers_to_forward: ["*"]
+    query_string: true
+    cookies: all
+
+  # Health check endpoints
+  - path_pattern: "/health"
+    target_origin: alb-primary
+    cache_policy:
+      default_ttl: 0
+      max_ttl: 0
+      min_ttl: 0
+    compress: false
+    viewer_protocol_policy: allow-all
+    allowed_methods: [GET, HEAD]
+    cached_methods: []
+
+  # Default behavior (SPA)
+  default:
+    target_origin: s3-frontend
+    cache_policy:
+      default_ttl: 300        # 5 minutes for HTML
+      max_ttl: 300
+      min_ttl: 0
+    compress: true
+    viewer_protocol_policy: redirect-to-https
+    allowed_methods: [GET, HEAD]
+    cached_methods: [GET, HEAD]
+    custom_error_responses:
+      - error_code: 403
+        response_code: 200
+        response_page_path: /index.html
+        ttl: 300
+      - error_code: 404
+        response_code: 200
+        response_page_path: /index.html
+        ttl: 300
+    lambda_functions:
+      - event_type: viewer-response
+        include_body: false
+
+# Origin configurations
+origins:
+  s3-static:
+    domain_name: musicconnect-static-assets.s3.amazonaws.com
+    origin_path: ""
+    s3_origin_config:
+      origin_access_identity: origin-access-identity/cloudfront/ABCDEFG
+
+  s3-media:
+    domain_name: musicconnect-media-content.s3.amazonaws.com
+    origin_path: ""
+    s3_origin_config:
+      origin_access_identity: origin-access-identity/cloudfront/HIJKLMN
+
+  s3-frontend:
+    domain_name: musicconnect-frontend.s3.amazonaws.com
+    origin_path: ""
+    s3_origin_config:
+      origin_access_identity: origin-access-identity/cloudfront/OPQRSTU
+
+  alb-primary:
+    domain_name: alb-us-east-1.musicconnect.com
+    origin_path: ""
+    custom_origin_config:
+      http_port: 80
+      https_port: 443
+      origin_protocol_policy: https-only
+      origin_ssl_protocols: [TLSv1.2]
+      origin_keepalive_timeout: 60
+      origin_read_timeout: 60
+    custom_headers:
+      - name: X-Origin-Verify
+        value: "${ORIGIN_VERIFY_SECRET}"
+
+  nlb-websocket:
+    domain_name: nlb-websocket.musicconnect.com
+    origin_path: ""
+    custom_origin_config:
+      http_port: 80
+      https_port: 443
+      origin_protocol_policy: https-only
+      origin_ssl_protocols: [TLSv1.2]
+
+# Cache policies
+cache_policies:
+  static_content:
+    name: MusicConnect-Static-Content
+    default_ttl: 86400
+    max_ttl: 31536000
+    min_ttl: 1
+    parameters_in_cache_key_and_forwarded_to_origin:
+      enable_accept_encoding_gzip: true
+      enable_accept_encoding_brotli: true
+      headers_config:
+        header_behavior: none
+      query_strings_config:
+        query_string_behavior: none
+      cookies_config:
+        cookie_behavior: none
+
+  api_content:
+    name: MusicConnect-API-Content
+    default_ttl: 0
+    max_ttl: 0
+    min_ttl: 0
+    parameters_in_cache_key_and_forwarded_to_origin:
+      enable_accept_encoding_gzip: true
+      headers_config:
+        header_behavior: whitelist
+        headers: [Authorization, Accept, Content-Type, X-Request-ID]
+      query_strings_config:
+        query_string_behavior: all
+      cookies_config:
+        cookie_behavior: all
+
+  media_streaming:
+    name: MusicConnect-Media-Streaming
+    default_ttl: 3600
+    max_ttl: 31536000
+    min_ttl: 0
+    parameters_in_cache_key_and_forwarded_to_origin:
+      enable_accept_encoding_gzip: false
+      headers_config:
+        header_behavior: whitelist
+        headers: [Origin, Range, If-Range]
+      query_strings_config:
+        query_string_behavior: whitelist
+        query_strings: [token, expires]
+      cookies_config:
+        cookie_behavior: none

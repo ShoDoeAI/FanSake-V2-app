@@ -1,0 +1,199 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  namespace: musicconnect
+  labels:
+    app: pgbouncer
+    app.kubernetes.io/name: pgbouncer
+    app.kubernetes.io/component: database-proxy
+    app.kubernetes.io/part-of: musicconnect
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: pgbouncer
+        app.kubernetes.io/name: pgbouncer
+        app.kubernetes.io/component: database-proxy
+        app.kubernetes.io/part-of: musicconnect
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9127"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: pgbouncer
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        fsGroup: 70
+      containers:
+      - name: pgbouncer
+        image: pgbouncer/pgbouncer:1.21.0
+        ports:
+        - containerPort: 6432
+          name: pgbouncer
+          protocol: TCP
+        env:
+        - name: DATABASES_HOST
+          value: "aurora-$(REGION).cluster-$(CLUSTER_ID).$(REGION).rds.amazonaws.com"
+        - name: DATABASES_PORT
+          value: "5432"
+        - name: DATABASES_USER
+          valueFrom:
+            secretKeyRef:
+              name: pgbouncer-credentials
+              key: username
+        - name: DATABASES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pgbouncer-credentials
+              key: password
+        - name: POOL_MODE
+          value: "transaction"
+        - name: MAX_CLIENT_CONN
+          value: "10000"
+        - name: DEFAULT_POOL_SIZE
+          value: "25"
+        volumeMounts:
+        - name: pgbouncer-config
+          mountPath: /etc/pgbouncer
+          readOnly: true
+        - name: pgbouncer-tls
+          mountPath: /etc/pgbouncer/tls
+          readOnly: true
+        livenessProbe:
+          tcpSocket:
+            port: pgbouncer
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: pgbouncer
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      
+      # Prometheus exporter sidecar
+      - name: pgbouncer-exporter
+        image: prometheuscommunity/pgbouncer-exporter:v0.7.0
+        ports:
+        - containerPort: 9127
+          name: metrics
+        env:
+        - name: DATA_SOURCE_URI
+          value: "localhost:6432/pgbouncer?sslmode=disable"
+        - name: DATA_SOURCE_USER
+          value: "pgbouncer_stats"
+        - name: DATA_SOURCE_PASS
+          valueFrom:
+            secretKeyRef:
+              name: pgbouncer-credentials
+              key: stats-password
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+            
+      volumes:
+      - name: pgbouncer-config
+        configMap:
+          name: pgbouncer-config
+      - name: pgbouncer-tls
+        secret:
+          secretName: pgbouncer-tls
+          
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - pgbouncer
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer
+  namespace: musicconnect
+  labels:
+    app: pgbouncer
+    app.kubernetes.io/name: pgbouncer
+    app.kubernetes.io/component: database-proxy
+    app.kubernetes.io/part-of: musicconnect
+spec:
+  type: ClusterIP
+  selector:
+    app: pgbouncer
+  ports:
+  - name: pgbouncer
+    port: 5432
+    targetPort: pgbouncer
+    protocol: TCP
+  - name: metrics
+    port: 9127
+    targetPort: metrics
+    protocol: TCP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pgbouncer
+  namespace: musicconnect
+  labels:
+    app: pgbouncer
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgbouncer-config
+  namespace: musicconnect
+  labels:
+    app: pgbouncer
+data:
+  pgbouncer.ini: |
+    [databases]
+    musicconnect = host=POSTGRES_HOST port=5432 dbname=musicconnect auth_user=pgbouncer_auth
+    
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = 6432
+    auth_type = md5
+    auth_file = /etc/pgbouncer/userlist.txt
+    pool_mode = transaction
+    max_client_conn = 10000
+    default_pool_size = 25
+    min_pool_size = 10
+    server_lifetime = 3600
+    server_idle_timeout = 600
+    log_connections = 1
+    log_disconnections = 1
+    stats_period = 60
+    
+  userlist.txt: |
+    "pgbouncer_auth" "md5_password_hash"
+    "pgbouncer_stats" "md5_stats_password_hash"
+    "pgbouncer_admin" "md5_admin_password_hash"

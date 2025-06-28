@@ -1,0 +1,132 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# Alert routing tree
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+  
+  routes:
+    # Critical alerts - immediate page
+    - match:
+        severity: critical
+      receiver: 'pagerduty-critical'
+      repeat_interval: 5m
+      continue: true
+    
+    # Payment issues - immediate notification to payments team
+    - match:
+        team: payments
+      receiver: 'payments-team'
+      group_wait: 0s
+      continue: true
+    
+    # Business metrics - notify product team
+    - match:
+        team: business
+      receiver: 'product-team'
+      group_wait: 5m
+    
+    # Infrastructure alerts
+    - match:
+        team: infrastructure
+      receiver: 'infra-team'
+      group_wait: 30s
+    
+    # Backend alerts
+    - match:
+        team: backend
+      receiver: 'backend-team'
+      group_wait: 1m
+
+# Notification receivers
+receivers:
+  - name: 'default'
+    slack_configs:
+      - channel: '#alerts'
+        title: 'FanSake Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}'
+
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+          alerts: '{{ range .Alerts }}{{ .Labels.alertname }}: {{ .Annotations.description }}\n{{ end }}'
+    slack_configs:
+      - channel: '#critical-alerts'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          *Runbook:* <{{ .Annotations.runbook_url }}|View Runbook>
+          {{ end }}
+        send_resolved: true
+
+  - name: 'payments-team'
+    email_configs:
+      - to: 'payments-oncall@fansake.com'
+        headers:
+          Subject: 'Payment Alert: {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - channel: '#payments-alerts'
+        title: '💳 Payment Issue: {{ .GroupLabels.alertname }}'
+        text: '{{ .CommonAnnotations.description }}'
+        send_resolved: true
+
+  - name: 'product-team'
+    slack_configs:
+      - channel: '#product-metrics'
+        title: '📊 Business Metric Alert'
+        text: |
+          *Metric:* {{ .GroupLabels.alertname }}
+          *Details:* {{ .CommonAnnotations.description }}
+        send_resolved: false
+
+  - name: 'infra-team'
+    slack_configs:
+      - channel: '#infrastructure'
+        title: '🔧 Infrastructure Alert'
+        text: '{{ .CommonAnnotations.summary }}'
+        actions:
+          - type: button
+            text: 'View Grafana'
+            url: 'https://grafana.fansake.com'
+          - type: button
+            text: 'View Runbook'
+            url: '{{ .CommonAnnotations.runbook_url }}'
+
+  - name: 'backend-team'
+    slack_configs:
+      - channel: '#backend-alerts'
+        title: 'Backend Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+# Inhibition rules
+inhibit_rules:
+  # Don't alert on high latency if the service is down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match:
+      alertname: 'HighLatency'
+    equal: ['service']
+  
+  # Don't alert on individual failures during failover
+  - source_match:
+      alertname: 'RegionFailoverTriggered'
+    target_match_re:
+      alertname: '.*'
+    equal: ['region']
+
+# On-call schedules
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

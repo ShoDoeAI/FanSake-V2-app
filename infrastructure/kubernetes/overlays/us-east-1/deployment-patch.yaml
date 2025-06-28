@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: musicconnect-backend
+spec:
+  replicas: 5
+  template:
+    spec:
+      nodeSelector:
+        node.kubernetes.io/instance-type: t3.large
+        topology.kubernetes.io/region: us-east-1
+      tolerations:
+      - key: spot
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      containers:
+      - name: backend
+        env:
+        - name: AWS_REGION
+          value: "us-east-1"
+        - name: PRIMARY_REGION
+          value: "true"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: musicconnect-frontend
+spec:
+  replicas: 5
+  template:
+    spec:
+      nodeSelector:
+        node.kubernetes.io/instance-type: t3.large
+        topology.kubernetes.io/region: us-east-1
+      tolerations:
+      - key: spot
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: musicconnect-websocket
+spec:
+  replicas: 3
+  template:
+    spec:
+      nodeSelector:
+        node.kubernetes.io/instance-type: t3.large
+        topology.kubernetes.io/region: us-east-1
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values:
+                - t3.xlarge
+                - t3.large

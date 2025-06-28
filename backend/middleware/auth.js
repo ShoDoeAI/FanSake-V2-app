@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const MockUser = require('../models/MockUser');
 
 // Middleware to verify JWT token
 const authenticateToken = async (req, res, next) => {
@@ -15,7 +16,14 @@ const authenticateToken = async (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
-    const user = await User.findById(decoded.userId).select('-password');
+    
+    // For demo/testing, use MockUser
+    let user;
+    if (process.env.USE_MOCK_DATA !== 'false') {
+      user = MockUser.findById(decoded.userId);
+    } else {
+      user = await User.findById(decoded.userId).select('-password');
+    }
 
     if (!user || !user.isActive) {
       return res.status(401).json({
@@ -110,6 +118,25 @@ const requireFanTier = (requiredTier) => {
   };
 };
 
+// Middleware to verify user is admin
+const isAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      error: 'Authentication required',
+      message: 'User must be authenticated'
+    });
+  }
+
+  if (req.user.role !== 'admin' && req.user.userType !== 'admin') {
+    return res.status(403).json({
+      error: 'Access denied',
+      message: 'This endpoint requires admin privileges'
+    });
+  }
+
+  next();
+};
+
 // Optional authentication - adds user to request if token is valid, but doesn't require it
 const optionalAuth = async (req, res, next) => {
   try {
@@ -144,6 +171,7 @@ module.exports = {
   requireArtist,
   requireFan,
   requireFanTier,
-  optionalAuth
+  optionalAuth,
+  isAdmin
 };
 

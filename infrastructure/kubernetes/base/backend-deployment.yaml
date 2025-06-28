@@ -1,0 +1,169 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: musicconnect-backend
+  namespace: musicconnect
+  labels:
+    app: musicconnect-backend
+    version: v1
+    app.kubernetes.io/name: musicconnect-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: musicconnect
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: musicconnect-backend
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: musicconnect-backend
+        version: v1
+        app.kubernetes.io/name: musicconnect-backend
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: musicconnect
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: musicconnect-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: backend
+        image: musicconnect/backend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 8081
+          name: metrics
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "8080"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: musicconnect-database
+              key: url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: musicconnect-redis
+              key: url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: musicconnect-jwt
+              key: secret
+        - name: STRIPE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: musicconnect-stripe
+              key: secret-key
+        - name: AWS_REGION
+          value: "$(AWS_REGION)"
+        - name: S3_BUCKET
+          value: "$(S3_BUCKET)"
+        - name: CLOUDFRONT_DISTRIBUTION_ID
+          value: "$(CLOUDFRONT_DISTRIBUTION_ID)"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: uploads
+          mountPath: /app/uploads
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: uploads
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - musicconnect-backend
+              topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: musicconnect-backend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: musicconnect-backend
+  namespace: musicconnect
+  labels:
+    app: musicconnect-backend
+    app.kubernetes.io/name: musicconnect-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: musicconnect
+spec:
+  type: ClusterIP
+  selector:
+    app: musicconnect-backend
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  - name: metrics
+    port: 8081
+    targetPort: metrics
+    protocol: TCP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: musicconnect-backend
+  namespace: musicconnect
+  labels:
+    app: musicconnect-backend
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/musicconnect-backend-role

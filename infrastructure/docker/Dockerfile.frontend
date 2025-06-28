@@ -1,0 +1,56 @@
+# Multi-stage build for optimized frontend image
+FROM node:18-alpine AS dependencies
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci --only=production
+
+FROM node:18-alpine AS build
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+# Build with production optimizations
+ARG REACT_APP_API_URL
+ARG REACT_APP_STRIPE_PUBLIC_KEY
+ARG REACT_APP_CLOUDFRONT_URL
+ENV GENERATE_SOURCEMAP=false
+RUN npm run build
+
+FROM nginx:alpine AS runtime
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Copy custom nginx config
+COPY infrastructure/docker/nginx.conf /etc/nginx/nginx.conf
+COPY infrastructure/docker/default.conf /etc/nginx/conf.d/default.conf
+
+# Copy built application
+COPY --from=build /app/build /usr/share/nginx/html
+
+# Add security headers and optimize nginx
+RUN echo "server_tokens off;" >> /etc/nginx/conf.d/security.conf && \
+    echo "add_header X-Frame-Options DENY always;" >> /etc/nginx/conf.d/security.conf && \
+    echo "add_header X-Content-Type-Options nosniff always;" >> /etc/nginx/conf.d/security.conf && \
+    echo "add_header X-XSS-Protection '1; mode=block' always;" >> /etc/nginx/conf.d/security.conf && \
+    echo "add_header Referrer-Policy 'strict-origin-when-cross-origin' always;" >> /etc/nginx/conf.d/security.conf && \
+    echo "add_header Content-Security-Policy \"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.musicconnect.com https://*.stripe.com wss://*.musicconnect.com; frame-src https://*.stripe.com;\" always;" >> /etc/nginx/conf.d/security.conf
+
+# Create nginx user and set permissions
+RUN addgroup -g 101 -S nginx && \
+    adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx && \
+    chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /etc/nginx/conf.d && \
+    chmod -R 755 /usr/share/nginx/html && \
+    touch /var/run/nginx.pid && \
+    chown nginx:nginx /var/run/nginx.pid
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost/health || exit 1
+
+# Switch to non-root user
+USER nginx
+
+# Expose port
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

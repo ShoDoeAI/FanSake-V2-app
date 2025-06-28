@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: musicconnect
+  labels:
+    app.kubernetes.io/name: musicconnect
+    app.kubernetes.io/part-of: musicconnect-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: musicconnect-monitoring
+  labels:
+    app.kubernetes.io/name: musicconnect-monitoring
+    app.kubernetes.io/part-of: musicconnect-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: musicconnect-platform

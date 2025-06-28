@@ -1,0 +1,146 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: musicconnect-websocket
+  namespace: musicconnect
+  labels:
+    app: musicconnect-websocket
+    version: v1
+    app.kubernetes.io/name: musicconnect-websocket
+    app.kubernetes.io/component: websocket
+    app.kubernetes.io/part-of: musicconnect
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: musicconnect-websocket
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: musicconnect-websocket
+        version: v1
+        app.kubernetes.io/name: musicconnect-websocket
+        app.kubernetes.io/component: websocket
+        app.kubernetes.io/part-of: musicconnect
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8082"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: musicconnect-websocket
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: websocket
+        image: musicconnect/websocket:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: ws
+          protocol: TCP
+        - containerPort: 8082
+          name: metrics
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "8080"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: musicconnect-redis
+              key: url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: musicconnect-jwt
+              key: secret
+        - name: REDIS_CLUSTER_NODES
+          value: "$(REDIS_CLUSTER_NODES)"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: metrics
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - musicconnect-websocket
+            topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: musicconnect-websocket
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: musicconnect-websocket
+  namespace: musicconnect
+  labels:
+    app: musicconnect-websocket
+    app.kubernetes.io/name: musicconnect-websocket
+    app.kubernetes.io/component: websocket
+    app.kubernetes.io/part-of: musicconnect
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  selector:
+    app: musicconnect-websocket
+  ports:
+  - name: ws
+    port: 80
+    targetPort: ws
+    protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: musicconnect-websocket
+  namespace: musicconnect
+  labels:
+    app: musicconnect-websocket
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/musicconnect-websocket-role

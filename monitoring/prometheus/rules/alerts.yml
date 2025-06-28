@@ -1,0 +1,247 @@
+groups:
+  - name: service_alerts
+    interval: 30s
+    rules:
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+            /
+            sum(rate(http_requests_total[5m])) by (service)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "High error rate on {{ $labels.service }}"
+          description: "{{ $labels.service }} has error rate of {{ $value | humanizePercentage }} (threshold: 5%)"
+          runbook_url: "https://wiki.musicconnect.com/runbooks/high-error-rate"
+
+      # High Latency
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High latency on {{ $labels.service }}"
+          description: "95th percentile latency is {{ $value }}s (threshold: 1s)"
+
+      # Service Down
+      - alert: ServiceDown
+        expr: up{job=~"backend|websocket|frontend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: oncall
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "{{ $labels.instance }} has been down for more than 1 minute"
+          runbook_url: "https://wiki.musicconnect.com/runbooks/service-down"
+
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # Database Connection Pool Exhaustion
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          (
+            pg_stat_database_numbackends{datname="musicconnect"} 
+            / 
+            pg_settings_max_connections
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          team: database
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "{{ $value | humanizePercentage }} of connections used"
+
+      # High Database CPU
+      - alert: HighDatabaseCPU
+        expr: |
+          avg(rate(container_cpu_usage_seconds_total{pod=~"postgres-.*"}[5m])) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "High CPU usage on PostgreSQL"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+
+      # Replication Lag
+      - alert: DatabaseReplicationLag
+        expr: pg_replication_lag > 10
+        for: 5m
+        labels:
+          severity: critical
+          team: database
+        annotations:
+          summary: "Database replication lag detected"
+          description: "Replication lag is {{ $value }}s"
+
+  - name: infrastructure_alerts
+    interval: 30s
+    rules:
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+          ) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # Disk Space Low
+      - alert: DiskSpaceLow
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"}
+          ) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Only {{ $value | humanizePercentage }} disk space left on {{ $labels.mountpoint }}"
+
+      # Pod Restart
+      - alert: PodRestartingTooOften
+        expr: |
+          rate(kube_pod_container_status_restarts_total[15m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "Pod {{ $labels.pod }} restarting frequently"
+          description: "Pod has restarted {{ $value }} times in the last 15 minutes"
+
+  - name: business_alerts
+    interval: 30s
+    rules:
+      # Payment Failures
+      - alert: HighPaymentFailureRate
+        expr: |
+          (
+            sum(rate(stripe_payment_failed_total[5m]))
+            /
+            sum(rate(stripe_payment_total[5m]))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: payments
+        annotations:
+          summary: "High payment failure rate"
+          description: "Payment failure rate is {{ $value | humanizePercentage }}"
+          impact: "Revenue loss"
+
+      # Subscription Churn
+      - alert: HighSubscriptionChurnRate
+        expr: |
+          rate(subscription_canceled_total[1h]) > 10
+        for: 30m
+        labels:
+          severity: warning
+          team: product
+        annotations:
+          summary: "High subscription cancellation rate"
+          description: "{{ $value }} subscriptions canceled per hour"
+
+      # Low Upload Rate
+      - alert: LowContentUploadRate
+        expr: |
+          rate(content_uploads_total[1h]) < 5
+        for: 2h
+        labels:
+          severity: info
+          team: product
+        annotations:
+          summary: "Low content upload rate"
+          description: "Only {{ $value }} uploads per hour"
+
+  - name: security_alerts
+    interval: 30s
+    rules:
+      # Failed Login Attempts
+      - alert: HighFailedLoginRate
+        expr: |
+          sum(rate(auth_login_failed_total[5m])) by (ip) > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High failed login rate from {{ $labels.ip }}"
+          description: "{{ $value }} failed logins per second"
+
+      # API Rate Limit Violations
+      - alert: APIRateLimitViolations
+        expr: |
+          sum(rate(api_rate_limit_exceeded_total[5m])) by (user_id) > 100
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "API rate limit violations by user {{ $labels.user_id }}"
+          description: "{{ $value }} violations per second"
+
+      # SSL Certificate Expiry
+      - alert: SSLCertificateExpiringSoon
+        expr: |
+          probe_ssl_earliest_cert_expiry - time() < 86400 * 7
+        for: 1h
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "SSL certificate expiring soon for {{ $labels.instance }}"
+          description: "Certificate expires in {{ $value | humanizeDuration }}"
+
+  - name: cdn_alerts
+    interval: 30s
+    rules:
+      # CDN Cache Hit Rate
+      - alert: LowCDNCacheHitRate
+        expr: |
+          (
+            sum(rate(cloudfront_cache_hits_total[5m]))
+            /
+            sum(rate(cloudfront_requests_total[5m]))
+          ) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "Low CDN cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 80%)"
+
+      # CDN Origin Errors
+      - alert: HighCDNOriginErrors
+        expr: |
+          rate(cloudfront_origin_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "High CDN origin error rate"
+          description: "{{ $value }} errors per second from origin"

@@ -1,0 +1,194 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: musicconnect-pipeline
+  namespace: tekton-pipelines
+spec:
+  params:
+  - name: git-revision
+    type: string
+    default: main
+  - name: git-url
+    type: string
+    default: https://github.com/musicconnect/musicconnect
+  - name: image-registry
+    type: string
+    default: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+  workspaces:
+  - name: shared-workspace
+  - name: docker-credentials
+  tasks:
+  # Clone repository
+  - name: git-clone
+    taskRef:
+      name: git-clone
+    params:
+    - name: url
+      value: $(params.git-url)
+    - name: revision
+      value: $(params.git-revision)
+    workspaces:
+    - name: output
+      workspace: shared-workspace
+
+  # Run tests in parallel
+  - name: test-backend
+    taskRef:
+      name: npm-test
+    params:
+    - name: path
+      value: backend
+    workspaces:
+    - name: source
+      workspace: shared-workspace
+    runAfter:
+    - git-clone
+
+  - name: test-frontend
+    taskRef:
+      name: npm-test
+    params:
+    - name: path
+      value: frontend
+    workspaces:
+    - name: source
+      workspace: shared-workspace
+    runAfter:
+    - git-clone
+
+  # Security scanning
+  - name: security-scan
+    taskRef:
+      name: trivy-scan
+    workspaces:
+    - name: source
+      workspace: shared-workspace
+    runAfter:
+    - git-clone
+
+  # Build images in parallel
+  - name: build-backend
+    taskRef:
+      name: kaniko
+    params:
+    - name: IMAGE
+      value: $(params.image-registry)/musicconnect-backend:$(tasks.git-clone.results.commit)
+    - name: DOCKERFILE
+      value: ./infrastructure/docker/Dockerfile.backend
+    workspaces:
+    - name: source
+      workspace: shared-workspace
+    - name: dockerconfig
+      workspace: docker-credentials
+    runAfter:
+    - test-backend
+    - security-scan
+
+  - name: build-frontend
+    taskRef:
+      name: kaniko
+    params:
+    - name: IMAGE
+      value: $(params.image-registry)/musicconnect-frontend:$(tasks.git-clone.results.commit)
+    - name: DOCKERFILE
+      value: ./infrastructure/docker/Dockerfile.frontend
+    - name: EXTRA_ARGS
+      value:
+      - --build-arg=REACT_APP_API_URL=https://api.musicconnect.com
+    workspaces:
+    - name: source
+      workspace: shared-workspace
+    - name: dockerconfig
+      workspace: docker-credentials
+    runAfter:
+    - test-frontend
+    - security-scan
+
+  - name: build-websocket
+    taskRef:
+      name: kaniko
+    params:
+    - name: IMAGE
+      value: $(params.image-registry)/musicconnect-websocket:$(tasks.git-clone.results.commit)
+    - name: DOCKERFILE
+      value: ./infrastructure/docker/Dockerfile.websocket
+    workspaces:
+    - name: source
+      workspace: shared-workspace
+    - name: dockerconfig
+      workspace: docker-credentials
+    runAfter:
+    - test-backend
+    - security-scan
+
+  # Deploy to staging
+  - name: deploy-staging
+    taskRef:
+      name: kubernetes-deploy
+    params:
+    - name: manifest-dir
+      value: kubernetes/overlays/staging
+    - name: image-tag
+      value: $(tasks.git-clone.results.commit)
+    workspaces:
+    - name: source
+      workspace: shared-workspace
+    runAfter:
+    - build-backend
+    - build-frontend
+    - build-websocket
+
+  # Run integration tests
+  - name: integration-tests
+    taskRef:
+      name: integration-test-suite
+    params:
+    - name: environment
+      value: staging
+    runAfter:
+    - deploy-staging
+
+  # Performance tests
+  - name: performance-tests
+    taskRef:
+      name: k6-load-test
+    params:
+    - name: script
+      value: tests/performance/load-test.js
+    - name: threshold
+      value: "p(95)<500"
+    runAfter:
+    - integration-tests
+
+  # Deploy to production (manual approval required)
+  - name: deploy-production
+    taskRef:
+      name: kubernetes-deploy
+    params:
+    - name: manifest-dir
+      value: kubernetes/overlays/production
+    - name: image-tag
+      value: $(tasks.git-clone.results.commit)
+    workspaces:
+    - name: source
+      workspace: shared-workspace
+    runAfter:
+    - performance-tests
+    when:
+    - input: "$(tasks.performance-tests.results.passed)"
+      operator: in
+      values: ["true"]
+
+  finally:
+  # Send notifications
+  - name: notify-slack
+    taskRef:
+      name: send-to-webhook-slack
+    params:
+    - name: webhook-secret
+      value: slack-webhook-secret
+    - name: message
+      value: |
+        Pipeline $(context.pipelineRun.name) completed
+        Status: $(tasks.status)
+        Commit: $(params.git-revision)

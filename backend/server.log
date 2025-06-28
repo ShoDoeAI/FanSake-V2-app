@@ -1,0 +1,33 @@
+
+> musicconnect-backend@1.0.0 start
+> node server.js
+
+API key does not start with "SG.".
+🚀 MusicConnect API server running on port 5001
+📍 Environment: development
+🔌 WebSocket server initialized
+(node:26919) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)
+::1 - - [27/Jun/2025:22:42:45 +0000] "GET /api/health HTTP/1.1" 200 101 "-" "curl/8.6.0"
+❌ MongoDB connection error: MongooseServerSelectionError: connect ECONNREFUSED ::1:27017
+    at _handleConnectionErrors (/Users/sho/Code/Claude-Code/MusicConnect/backend/node_modules/mongoose/lib/connection.js:816:11)
+    at NativeConnection.openUri (/Users/sho/Code/Claude-Code/MusicConnect/backend/node_modules/mongoose/lib/connection.js:791:11) {
+  reason: TopologyDescription {
+    type: 'Unknown',
+    servers: Map(1) { 'localhost:27017' => [ServerDescription] },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: null,
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined
+}

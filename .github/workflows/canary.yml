@@ -1,0 +1,179 @@
+name: Canary Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy'
+        required: true
+        type: choice
+        options:
+          - backend
+          - frontend
+          - websocket
+      region:
+        description: 'Initial canary region'
+        required: true
+        type: choice
+        options:
+          - us-west-2
+          - eu-west-1
+          - ap-southeast-1
+      percentage:
+        description: 'Canary traffic percentage'
+        required: true
+        default: '10'
+
+env:
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  canary-deploy:
+    name: Deploy Canary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ github.event.inputs.region }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name musicconnect-${{ github.event.inputs.region }}-eks --region ${{ github.event.inputs.region }}
+
+      - name: Deploy canary version
+        run: |
+          # Create canary deployment
+          kubectl apply -f - <<EOF
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: musicconnect-${{ github.event.inputs.service }}-canary
+            namespace: musicconnect
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: musicconnect-${{ github.event.inputs.service }}
+                version: canary
+            template:
+              metadata:
+                labels:
+                  app: musicconnect-${{ github.event.inputs.service }}
+                  version: canary
+              spec:
+                containers:
+                - name: ${{ github.event.inputs.service }}
+                  image: ${{ env.ECR_REGISTRY }}/musicconnect-${{ github.event.inputs.service }}:${{ github.sha }}
+                  ports:
+                  - containerPort: 8080
+                  env:
+                  - name: CANARY_DEPLOYMENT
+                    value: "true"
+          EOF
+
+      - name: Configure traffic splitting
+        run: |
+          # Install Flagger for canary deployments
+          kubectl apply -k github.com/fluxcd/flagger//kustomize/linkerd
+          
+          # Create canary resource
+          kubectl apply -f - <<EOF
+          apiVersion: flagger.app/v1beta1
+          kind: Canary
+          metadata:
+            name: musicconnect-${{ github.event.inputs.service }}
+            namespace: musicconnect
+          spec:
+            targetRef:
+              apiVersion: apps/v1
+              kind: Deployment
+              name: musicconnect-${{ github.event.inputs.service }}
+            service:
+              port: 80
+            analysis:
+              interval: 1m
+              threshold: 10
+              maxWeight: ${{ github.event.inputs.percentage }}
+              stepWeight: 5
+              metrics:
+              - name: request-success-rate
+                thresholdRange:
+                  min: 99
+                interval: 1m
+              - name: request-duration
+                thresholdRange:
+                  max: 500
+                interval: 1m
+              - name: error-rate
+                thresholdRange:
+                  max: 1
+                interval: 1m
+              webhooks:
+              - name: load-test
+                url: http://flagger-loadtester.musicconnect/
+                timeout: 5s
+                metadata:
+                  cmd: "hey -z 1m -q 10 -c 2 http://musicconnect-${{ github.event.inputs.service }}.musicconnect/"
+          EOF
+
+      - name: Monitor canary progress
+        run: |
+          # Watch canary progress
+          kubectl -n musicconnect get canary musicconnect-${{ github.event.inputs.service }} --watch
+
+  promote-canary:
+    name: Promote Canary
+    needs: canary-deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ github.event.inputs.region }}
+
+      - name: Promote canary to production
+        run: |
+          aws eks update-kubeconfig --name musicconnect-${{ github.event.inputs.region }}-eks --region ${{ github.event.inputs.region }}
+          
+          # Promote canary
+          kubectl -n musicconnect annotate canary musicconnect-${{ github.event.inputs.service }} flagger.app/promote=true
+
+      - name: Trigger full deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy.yml',
+              ref: 'main',
+              inputs: {
+                region: 'all'
+              }
+            })
+
+  notify:
+    name: Send Notifications
+    needs: [canary-deploy, promote-canary]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            Canary deployment for ${{ github.event.inputs.service }} in ${{ github.event.inputs.region }} ${{ job.status }}
+            Traffic: ${{ github.event.inputs.percentage }}%
+            Commit: ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

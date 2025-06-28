@@ -1,0 +1,134 @@
+# Thanos configuration for multi-region metrics federation
+objstoreConfig: |-
+  type: S3
+  config:
+    bucket: musicconnect-thanos-metrics
+    endpoint: s3.us-east-1.amazonaws.com
+    region: us-east-1
+    access_key: $(AWS_ACCESS_KEY_ID)
+    secret_key: $(AWS_SECRET_ACCESS_KEY)
+
+query:
+  enabled: true
+  replicaCount: 2
+  
+  stores:
+    - dnssrv+_grpc._tcp.thanos-storegateway.musicconnect-monitoring.svc.cluster.local
+    - dnssrv+_grpc._tcp.thanos-receive.musicconnect-monitoring.svc.cluster.local
+    - thanos-sidecar-us-east-1.musicconnect.com:10901
+    - thanos-sidecar-us-west-2.musicconnect.com:10901
+    - thanos-sidecar-eu-west-1.musicconnect.com:10901
+    - thanos-sidecar-ap-southeast-1.musicconnect.com:10901
+  
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 8Gi
+
+queryFrontend:
+  enabled: true
+  replicaCount: 2
+  
+  config: |-
+    type: IN-MEMORY
+    config:
+      max_size: 1GB
+      max_size_items: 5000
+      validity: 200s
+
+storegateway:
+  enabled: true
+  replicaCount: 3
+  
+  persistence:
+    enabled: true
+    size: 100Gi
+    
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 8Gi
+
+compactor:
+  enabled: true
+  
+  retentionResolutionRaw: 30d
+  retentionResolution5m: 90d
+  retentionResolution1h: 1y
+  
+  persistence:
+    enabled: true
+    size: 100Gi
+    
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+
+ruler:
+  enabled: true
+  replicaCount: 2
+  
+  alertmanagers:
+    - http://alertmanager.musicconnect-monitoring.svc.cluster.local:9093
+    
+  config: |-
+    groups:
+      - name: musicconnect_global_rules
+        interval: 30s
+        rules:
+        - alert: GlobalHighErrorRate
+          expr: |
+            sum by (region) (
+              rate(http_requests_total{status=~"5.."}[5m])
+            ) / sum by (region) (
+              rate(http_requests_total[5m])
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            scope: global
+          annotations:
+            summary: "High error rate in {{ $labels.region }}"
+            description: "Region {{ $labels.region }} has error rate of {{ $value | humanizePercentage }}"
+            
+        - alert: RegionDown
+          expr: |
+            up{job="prometheus", region!=""} == 0
+          for: 5m
+          labels:
+            severity: critical
+            scope: global
+          annotations:
+            summary: "Region {{ $labels.region }} is down"
+            description: "Cannot reach Prometheus in region {{ $labels.region }}"
+
+receive:
+  enabled: true
+  replicaCount: 3
+  
+  replicationFactor: 3
+  
+  tsdbRetention: 15d
+  
+  persistence:
+    enabled: true
+    size: 100Gi
+
+# Sidecar configuration for Prometheus integration
+sidecar:
+  prometheus:
+    url: http://prometheus-server:9090
+  
+  objstore:
+    secretName: thanos-objstore-secret
+    secretKey: objstore.yml

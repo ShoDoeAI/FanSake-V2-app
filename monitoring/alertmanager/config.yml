@@ -1,0 +1,113 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+  routes:
+    # Critical alerts go to PagerDuty
+    - match:
+        severity: critical
+      receiver: pagerduty
+      continue: true
+      
+    # Payment alerts go to payments team
+    - match:
+        team: payments
+      receiver: payments-team
+      
+    # Security alerts
+    - match:
+        team: security
+      receiver: security-team
+      
+    # Database alerts
+    - match:
+        team: database
+      receiver: database-team
+      
+    # All alerts also go to Slack
+    - match_re:
+        severity: critical|warning
+      receiver: slack-notifications
+
+receivers:
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://webhook-logger:8080/'
+        
+  - name: 'pagerduty'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        description: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        details:
+          firing: '{{ .GroupLabels.alertname }}'
+          severity: '{{ .CommonLabels.severity }}'
+          service: '{{ .CommonLabels.service }}'
+          
+  - name: 'slack-notifications'
+    slack_configs:
+      - channel: '#alerts'
+        username: 'MusicConnect Alerts'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        title: '{{ .GroupLabels.alertname }}'
+        title_link: '{{ template "slack.default.titlelink" . }}'
+        pretext: '{{ .CommonAnnotations.summary }}'
+        text: |-
+          {{ range .Alerts }}
+            *Alert:* {{ .Labels.alertname }} - `{{ .Labels.severity }}`
+            *Description:* {{ .Annotations.description }}
+            *Service:* {{ .Labels.service }}
+            *Details:*
+            {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
+            {{ end }}
+          {{ end }}
+        send_resolved: true
+        
+  - name: 'payments-team'
+    email_configs:
+      - to: 'payments@musicconnect.com'
+        from: 'alerts@musicconnect.com'
+        headers:
+          Subject: 'MusicConnect Payment Alert: {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - channel: '#payments-alerts'
+        
+  - name: 'security-team'
+    email_configs:
+      - to: 'security@musicconnect.com'
+        from: 'alerts@musicconnect.com'
+        headers:
+          Subject: 'MusicConnect Security Alert: {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - channel: '#security-alerts'
+        
+  - name: 'database-team'
+    email_configs:
+      - to: 'database@musicconnect.com'
+        from: 'alerts@musicconnect.com'
+    slack_configs:
+      - channel: '#database-alerts'
+
+inhibit_rules:
+  # Inhibit warning alerts if critical alerts are firing for the same service
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service', 'instance']
+    
+  # Inhibit alerts when service is in maintenance
+  - source_match:
+      alertname: 'MaintenanceMode'
+    target_match_re:
+      severity: 'warning|critical'
+    equal: ['service']
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

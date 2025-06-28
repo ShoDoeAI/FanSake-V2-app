@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - backend-deployment.yaml
+  - frontend-deployment.yaml
+  - websocket-deployment.yaml
+  - hpa.yaml
+  - ingress.yaml
+  - configmap.yaml
+  - pdb.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/version: v1.0.0
+
+images:
+  - name: musicconnect/backend
+    newTag: latest
+  - name: musicconnect/frontend
+    newTag: latest
+  - name: musicconnect/websocket
+    newTag: latest

@@ -1,0 +1,88 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Region to rollback'
+        required: true
+        type: choice
+        options:
+          - all
+          - us-east-1
+          - us-west-2
+          - eu-west-1
+          - ap-southeast-1
+      version:
+        description: 'Git SHA or tag to rollback to'
+        required: true
+
+env:
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  rollback:
+    name: Rollback Region
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        region: [us-east-1, us-west-2, eu-west-1, ap-southeast-1]
+    if: github.event.inputs.region == 'all' || github.event.inputs.region == matrix.region
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.version }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ matrix.region }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name musicconnect-${{ matrix.region }}-eks --region ${{ matrix.region }}
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Rollback deployment
+        run: |
+          cd infrastructure/kubernetes/overlays/${{ matrix.region }}
+          
+          # Update image tags to rollback version
+          kustomize edit set image \
+            musicconnect/backend=${{ env.ECR_REGISTRY }}/musicconnect-backend:${{ github.event.inputs.version }} \
+            musicconnect/frontend=${{ env.ECR_REGISTRY }}/musicconnect-frontend:${{ github.event.inputs.version }} \
+            musicconnect/websocket=${{ env.ECR_REGISTRY }}/musicconnect-websocket:${{ github.event.inputs.version }}
+          
+          # Apply rollback
+          kustomize build . | kubectl apply -f -
+          
+          # Wait for rollout
+          kubectl rollout status deployment/musicconnect-backend -n musicconnect --timeout=10m
+          kubectl rollout status deployment/musicconnect-frontend -n musicconnect --timeout=10m
+          kubectl rollout status deployment/musicconnect-websocket -n musicconnect --timeout=10m
+
+      - name: Verify rollback
+        run: |
+          kubectl get pods -n musicconnect -o wide
+          kubectl describe deployment -n musicconnect
+
+  notify:
+    name: Send Notifications
+    needs: rollback
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            Rollback to ${{ github.event.inputs.version }} in ${{ github.event.inputs.region }} ${{ job.status }}
+            Initiated by: ${{ github.actor }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

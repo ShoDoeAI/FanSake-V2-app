@@ -1,0 +1,47 @@
+# Multi-stage build for optimized backend image
+FROM node:18-alpine AS dependencies
+WORKDIR /app
+COPY backend/package*.json ./
+RUN npm ci --only=production
+
+FROM node:18-alpine AS build
+WORKDIR /app
+COPY backend/package*.json ./
+RUN npm ci
+COPY backend/ ./
+RUN npm run build
+
+FROM node:18-alpine AS runtime
+WORKDIR /app
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create non-root user
+RUN addgroup -g 1000 node && \
+    adduser -u 1000 -G node -s /bin/sh -D node
+
+# Copy production dependencies
+COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
+
+# Copy built application
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/package*.json ./
+
+# Set environment
+ENV NODE_ENV=production
+ENV PORT=8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:8080/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"
+
+# Switch to non-root user
+USER node
+
+# Expose port
+EXPOSE 8080 8081
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/server.js"]

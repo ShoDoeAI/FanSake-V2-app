@@ -1,0 +1,196 @@
+groups:
+  - name: fansake_critical
+    interval: 30s
+    rules:
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(fansake_errors_total[5m])) by (type)
+            /
+            sum(rate(fansake_api_request_duration_ms_count[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.type }}"
+          runbook_url: "https://wiki.fansake.com/runbooks/high-error-rate"
+
+      # Database Connection Issues
+      - alert: DatabaseConnectionFailure
+        expr: |
+          up{job="mongodb-exporter"} == 0 or
+          up{job="redis-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Database connection failure"
+          description: "{{ $labels.job }} is down"
+          runbook_url: "https://wiki.fansake.com/runbooks/database-connection"
+
+      # Payment Processing Failures
+      - alert: PaymentProcessingFailure
+        expr: |
+          rate(fansake_payment_failures_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: payments
+        annotations:
+          summary: "High payment failure rate"
+          description: "Payment failure rate is {{ $value }} per second"
+          runbook_url: "https://wiki.fansake.com/runbooks/payment-failures"
+
+      # API Latency
+      - alert: HighAPILatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(fansake_api_request_duration_ms_bucket[5m])) by (route, le)
+          ) > 1000
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High API latency detected"
+          description: "95th percentile latency for {{ $labels.route }} is {{ $value }}ms"
+
+      # Memory Usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)
+            / node_memory_MemTotal_bytes
+          ) > 0.9
+        for: 10m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # Disk Space
+      - alert: LowDiskSpace
+        expr: |
+          (
+            node_filesystem_free_bytes{mountpoint="/"}
+            / node_filesystem_size_bytes{mountpoint="/"}
+          ) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Low disk space"
+          description: "Only {{ $value | humanizePercentage }} disk space remaining"
+
+  - name: fansake_business
+    interval: 60s
+    rules:
+      # Revenue Drop
+      - alert: RevenueDropDetected
+        expr: |
+          (
+            sum(increase(fansake_revenue_total[1h]))
+            <
+            sum(increase(fansake_revenue_total[1h] offset 24h)) * 0.7
+          )
+        for: 30m
+        labels:
+          severity: warning
+          team: business
+        annotations:
+          summary: "Significant revenue drop detected"
+          description: "Revenue is down more than 30% compared to same time yesterday"
+
+      # Active Users Drop
+      - alert: ActiveUsersDropped
+        expr: |
+          (
+            sum(fansake_active_users_total)
+            <
+            sum(fansake_active_users_total offset 1h) * 0.8
+          )
+        for: 15m
+        labels:
+          severity: warning
+          team: product
+        annotations:
+          summary: "Active users dropped significantly"
+          description: "Active users down by {{ $value | humanizePercentage }}"
+
+      # Subscription Churn
+      - alert: HighSubscriptionChurn
+        expr: |
+          (
+            sum(increase(fansake_subscriptions_total{status="cancelled"}[24h]))
+            /
+            sum(fansake_subscriptions_total{status="active"})
+          ) > 0.05
+        for: 1h
+        labels:
+          severity: warning
+          team: business
+        annotations:
+          summary: "High subscription churn rate"
+          description: "Daily churn rate is {{ $value | humanizePercentage }}"
+
+  - name: fansake_infrastructure
+    interval: 30s
+    rules:
+      # WebSocket Connection Drop
+      - alert: WebSocketConnectionDrop
+        expr: |
+          (
+            sum(fansake_websocket_connections)
+            <
+            sum(fansake_websocket_connections offset 5m) * 0.5
+          )
+        for: 2m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Massive WebSocket connection drop"
+          description: "WebSocket connections dropped by more than 50%"
+
+      # Cache Hit Rate Low
+      - alert: LowCacheHitRate
+        expr: |
+          avg(fansake_cache_hit_rate{cache_type="redis"}) < 70
+        for: 15m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value }}%"
+
+      # Certificate Expiry
+      - alert: CertificateExpiringSoon
+        expr: |
+          probe_ssl_earliest_cert_expiry - time() < 7 * 24 * 60 * 60
+        for: 1h
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "Certificate expires in {{ $value | humanizeDuration }}"
+
+      # Multi-Region Failover
+      - alert: RegionFailoverTriggered
+        expr: |
+          increase(fansake_region_failover_total[5m]) > 0
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Region failover triggered"
+          description: "Failover from {{ $labels.from_region }} to {{ $labels.to_region }}"

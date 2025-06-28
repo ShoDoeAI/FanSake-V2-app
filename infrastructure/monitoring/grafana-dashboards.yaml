@@ -1,0 +1,203 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: musicconnect-dashboards
+  namespace: musicconnect-monitoring
+data:
+  musicconnect-overview.json: |
+    {
+      "dashboard": {
+        "title": "MusicConnect Overview",
+        "panels": [
+          {
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+            "id": 1,
+            "title": "Request Rate by Region",
+            "targets": [
+              {
+                "expr": "sum by (region) (rate(http_requests_total[5m]))",
+                "legendFormat": "{{ region }}"
+              }
+            ],
+            "type": "graph"
+          },
+          {
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+            "id": 2,
+            "title": "Error Rate by Service",
+            "targets": [
+              {
+                "expr": "sum by (job) (rate(http_requests_total{status=~\"5..\"}[5m])) / sum by (job) (rate(http_requests_total[5m]))",
+                "legendFormat": "{{ job }}"
+              }
+            ],
+            "type": "graph"
+          },
+          {
+            "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+            "id": 3,
+            "title": "P95 Latency",
+            "targets": [
+              {
+                "expr": "musicconnect:http_request_duration_seconds:p95",
+                "legendFormat": "{{ job }} - {{ route }}"
+              }
+            ],
+            "type": "graph"
+          },
+          {
+            "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+            "id": 4,
+            "title": "Active Users",
+            "targets": [
+              {
+                "expr": "sum(musicconnect_active_users)",
+                "legendFormat": "Total Users"
+              }
+            ],
+            "type": "stat"
+          },
+          {
+            "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+            "id": 5,
+            "title": "WebSocket Connections",
+            "targets": [
+              {
+                "expr": "sum by (region) (musicconnect_websocket_connections)",
+                "legendFormat": "{{ region }}"
+              }
+            ],
+            "type": "graph"
+          }
+        ]
+      }
+    }
+  
+  musicconnect-performance.json: |
+    {
+      "dashboard": {
+        "title": "MusicConnect Performance",
+        "panels": [
+          {
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+            "id": 1,
+            "title": "Response Time Heatmap",
+            "targets": [
+              {
+                "expr": "sum(increase(http_request_duration_seconds_bucket[5m])) by (le)",
+                "format": "heatmap",
+                "legendFormat": "{{ le }}"
+              }
+            ],
+            "type": "heatmap"
+          },
+          {
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+            "id": 2,
+            "title": "CPU Usage by Pod",
+            "targets": [
+              {
+                "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"musicconnect\"}[5m]))",
+                "legendFormat": "{{ pod }}"
+              }
+            ],
+            "type": "graph"
+          },
+          {
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+            "id": 3,
+            "title": "Memory Usage by Pod",
+            "targets": [
+              {
+                "expr": "sum by (pod) (container_memory_usage_bytes{namespace=\"musicconnect\"}) / 1024 / 1024 / 1024",
+                "legendFormat": "{{ pod }}"
+              }
+            ],
+            "type": "graph"
+          }
+        ]
+      }
+    }
+  
+  musicconnect-business.json: |
+    {
+      "dashboard": {
+        "title": "MusicConnect Business Metrics",
+        "panels": [
+          {
+            "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+            "id": 1,
+            "title": "Revenue (Last 24h)",
+            "targets": [
+              {
+                "expr": "sum(increase(musicconnect_payment_amount_total[24h]))",
+                "legendFormat": "Revenue"
+              }
+            ],
+            "type": "stat"
+          },
+          {
+            "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+            "id": 2,
+            "title": "New Subscriptions",
+            "targets": [
+              {
+                "expr": "sum(increase(musicconnect_subscriptions_created_total[24h]))",
+                "legendFormat": "New Subscriptions"
+              }
+            ],
+            "type": "stat"
+          },
+          {
+            "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+            "id": 3,
+            "title": "Content Uploads",
+            "targets": [
+              {
+                "expr": "sum(increase(musicconnect_content_uploads_total[24h]))",
+                "legendFormat": "Uploads"
+              }
+            ],
+            "type": "stat"
+          },
+          {
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+            "id": 4,
+            "title": "User Engagement by Region",
+            "targets": [
+              {
+                "expr": "sum by (region) (rate(musicconnect_user_actions_total[5m]))",
+                "legendFormat": "{{ region }}"
+              }
+            ],
+            "type": "graph"
+          }
+        ]
+      }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: musicconnect-monitoring
+data:
+  prometheus.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus-server:9090
+      isDefault: true
+      editable: false
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki:3100
+      editable: false
+    - name: Tempo
+      type: tempo
+      access: proxy
+      url: http://tempo:3200
+      editable: false

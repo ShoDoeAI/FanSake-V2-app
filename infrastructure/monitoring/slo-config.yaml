@@ -1,0 +1,137 @@
+apiVersion: sloth.slok.dev/v1
+kind: PrometheusServiceLevel
+metadata:
+  name: musicconnect-slos
+  namespace: musicconnect-monitoring
+spec:
+  service: "musicconnect"
+  labels:
+    team: "platform"
+    tier: "production"
+  slos:
+    # API Availability SLO
+    - name: "api-availability"
+      objective: 99.9
+      description: "99.9% of API requests should be successful"
+      sli:
+        raw:
+          error_ratio_query: |
+            sum(rate(http_requests_total{job="musicconnect-backend",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="musicconnect-backend"}[5m]))
+      alerting:
+        name: MusicConnectAPIAvailability
+        page_alert:
+          labels:
+            severity: critical
+        ticket_alert:
+          labels:
+            severity: warning
+
+    # API Latency SLO
+    - name: "api-latency"
+      objective: 99
+      description: "99% of API requests should complete within 500ms"
+      sli:
+        raw:
+          error_ratio_query: |
+            sum(rate(http_request_duration_seconds_bucket{job="musicconnect-backend",le="0.5"}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count{job="musicconnect-backend"}[5m]))
+      alerting:
+        name: MusicConnectAPILatency
+        page_alert:
+          labels:
+            severity: critical
+        ticket_alert:
+          labels:
+            severity: warning
+
+    # WebSocket Availability SLO
+    - name: "websocket-availability"
+      objective: 99.95
+      description: "99.95% of WebSocket connections should be successful"
+      sli:
+        raw:
+          error_ratio_query: |
+            sum(rate(websocket_connection_errors_total[5m]))
+            /
+            sum(rate(websocket_connection_attempts_total[5m]))
+      alerting:
+        name: MusicConnectWebSocketAvailability
+        page_alert:
+          labels:
+            severity: critical
+
+    # Content Upload Success SLO
+    - name: "upload-success"
+      objective: 99.5
+      description: "99.5% of content uploads should succeed"
+      sli:
+        raw:
+          error_ratio_query: |
+            sum(rate(content_upload_failures_total[5m]))
+            /
+            sum(rate(content_upload_attempts_total[5m]))
+      alerting:
+        name: MusicConnectUploadSuccess
+        ticket_alert:
+          labels:
+            severity: warning
+
+    # Payment Processing SLO
+    - name: "payment-processing"
+      objective: 99.99
+      description: "99.99% of payment transactions should be processed successfully"
+      sli:
+        raw:
+          error_ratio_query: |
+            sum(rate(payment_processing_errors_total[5m]))
+            /
+            sum(rate(payment_processing_attempts_total[5m]))
+      alerting:
+        name: MusicConnectPaymentProcessing
+        page_alert:
+          labels:
+            severity: critical
+            team: payments
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slo-dashboards
+  namespace: musicconnect-monitoring
+data:
+  slo-overview.json: |
+    {
+      "dashboard": {
+        "title": "MusicConnect SLO Overview",
+        "panels": [
+          {
+            "title": "API Availability - Error Budget",
+            "targets": [
+              {
+                "expr": "slo:sli_error:ratio_rate5m{sloth_service=\"musicconnect\", sloth_slo=\"api-availability\"}"
+              }
+            ]
+          },
+          {
+            "title": "API Latency - Error Budget",
+            "targets": [
+              {
+                "expr": "slo:sli_error:ratio_rate5m{sloth_service=\"musicconnect\", sloth_slo=\"api-latency\"}"
+              }
+            ]
+          },
+          {
+            "title": "30-day Error Budget Burn Rate",
+            "targets": [
+              {
+                "expr": "slo:error_budget:ratio{sloth_service=\"musicconnect\"}"
+              }
+            ]
+          }
+        ]
+      }
+    }
