@@ -1,6 +1,5 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext';
 
 // Simple test component
 const TestLogin = () => {
@@ -17,6 +16,7 @@ const Home = () => {
   return (
     <div style={{ padding: '20px' }}>
       <h1>FanSake Home</h1>
+      <p>Welcome to FanSake!</p>
       <Link to="/login">Go to Login</Link>
     </div>
   );
@@ -25,12 +25,10 @@ const Home = () => {
 function App() {
   return (
     <Router>
-      <SupabaseAuthProvider>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<TestLogin />} />
-        </Routes>
-      </SupabaseAuthProvider>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<TestLogin />} />
+      </Routes>
     </Router>
   );
 }
