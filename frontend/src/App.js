@@ -6,11 +6,9 @@ import Loading from './components/ui/Loading';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 
-// Eager load critical components
-import Navbar from './components/Navbar';
-import Home from './pages/Home';
-
-// Lazy load non-critical routes
+// Lazy load ALL components including Navbar
+const Navbar = lazy(() => import('./components/Navbar'));
+const Home = lazy(() => import('./pages/Home'));
 const Login = lazy(() => import('./pages/SupabaseLogin'));
 const Register = lazy(() => import('./pages/Register'));
 const Discovery = lazy(() => import('./pages/Discovery'));
@@ -34,51 +32,49 @@ function App() {
       <Router>
         <SupabaseAuthProvider>
           <AuthContextAdapter>
-            <div className="min-h-screen">
-              <Suspense fallback={<PageLoader />}>
+            <Suspense fallback={<PageLoader />}>
+              <div className="min-h-screen">
                 <Navbar />
-              </Suspense>
-              <main>
-                <Suspense fallback={<PageLoader />}>
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/" element={<Home />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/discovery" element={<Discovery />} />
-                <Route path="/artists" element={<Artists />} />
-                <Route path="/artists/:id" element={<ArtistProfile />} />
-                <Route path="/community" element={<Community />} />
-                
-                {/* Protected Routes */}
-                <Route 
-                  path="/fan-dashboard" 
-                  element={
-                    <ProtectedRoute userType="fan">
-                      <FanDashboard />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/artist-dashboard" 
-                  element={
-                    <ProtectedRoute userType="artist">
-                      <ArtistDashboard />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/media-library" 
-                  element={
-                    <ProtectedRoute userType="artist">
-                      <MediaLibrary />
-                    </ProtectedRoute>
-                  } 
-                />
-              </Routes>
+                <main>
+                  <Routes>
+                    {/* Public Routes */}
+                    <Route path="/" element={<Home />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/discovery" element={<Discovery />} />
+                    <Route path="/artists" element={<Artists />} />
+                    <Route path="/artists/:id" element={<ArtistProfile />} />
+                    <Route path="/community" element={<Community />} />
+                    
+                    {/* Protected Routes */}
+                    <Route 
+                      path="/fan-dashboard" 
+                      element={
+                        <ProtectedRoute userType="fan">
+                          <FanDashboard />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/artist-dashboard" 
+                      element={
+                        <ProtectedRoute userType="artist">
+                          <ArtistDashboard />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/media-library" 
+                      element={
+                        <ProtectedRoute userType="artist">
+                          <MediaLibrary />
+                        </ProtectedRoute>
+                      } 
+                    />
+                  </Routes>
+                </main>
+              </div>
             </Suspense>
-          </main>
-            </div>
           </AuthContextAdapter>
         </SupabaseAuthProvider>
       </Router>
