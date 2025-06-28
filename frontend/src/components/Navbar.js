@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContextAdapter';
 import { 
   HomeIcon, 
   MagnifyingGlassIcon, 
@@ -27,7 +27,10 @@ const Navbar = () => {
 
   const authenticatedNavItems = [
     { path: '/community', label: 'Community', icon: UserGroupIcon },
-    ...(isArtist() ? [{ path: '/artist-dashboard', label: 'Dashboard', icon: UserCircleIcon }] : []),
+    ...(isArtist() ? [
+      { path: '/artist-dashboard', label: 'Dashboard', icon: UserCircleIcon },
+      { path: '/media-library', label: 'Media Library', icon: MusicalNoteIcon }
+    ] : []),
     ...(isFan() ? [{ path: '/fan-dashboard', label: 'Dashboard', icon: UserCircleIcon }] : []),
   ];
 

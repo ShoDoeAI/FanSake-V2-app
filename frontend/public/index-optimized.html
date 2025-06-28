@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="MusicConnect - Discover and connect with independent artists" />
+  
+  <!-- Resource Hints -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.musicconnect.com" crossorigin>
+  <link rel="dns-prefetch" href="//api.musicconnect.com">
+  <link rel="dns-prefetch" href="//images.musicconnect.com">
+  
+  <!-- Critical CSS (inline for fastest render) -->
+  <style>
+    /* Critical above-the-fold styles */
+    :root {
+      --primary: #6366f1;
+      --secondary: #8b5cf6;
+      --background: #0f172a;
+      --surface: #1e293b;
+      --text: #f8fafc;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background-color: var(--background);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    .app-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--background);
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid var(--surface);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Hide content until JS loads */
+    .no-js #root { display: none; }
+    .js #root { display: block; }
+    .js .app-loading { display: none; }
+  </style>
+  
+  <!-- Preload critical fonts -->
+  <link rel="preload" href="/fonts/Inter-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/Inter-Medium.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <!-- Preload critical JS -->
+  <link rel="modulepreload" href="/static/js/runtime.js">
+  <link rel="modulepreload" href="/static/js/react.js">
+  <link rel="modulepreload" href="/static/js/main.js">
+  
+  <!-- Progressive enhancement -->
+  <script>
+    // Add JS class immediately
+    document.documentElement.className = document.documentElement.className.replace('no-js', 'js');
+    
+    // Feature detection
+    window.features = {
+      webp: false,
+      avif: false,
+      lazyLoading: 'loading' in HTMLImageElement.prototype,
+      intersectionObserver: 'IntersectionObserver' in window,
+      serviceWorker: 'serviceWorker' in navigator,
+    };
+    
+    // WebP detection
+    const webpTest = new Image();
+    webpTest.onload = webpTest.onerror = function() {
+      window.features.webp = webpTest.height === 2;
+    };
+    webpTest.src = 'data:image/webp;base64,UklGRjoAAABXRUJQVlA4IC4AAACyAgCdASoCAAIALmk0mk0iIiIiIgBoSygABc6WWgAA/veff/0PP8bA//LwYAAA';
+    
+    // Resource timing
+    if ('performance' in window && 'getEntriesByType' in window.performance) {
+      window.addEventListener('load', function() {
+        const perfData = {
+          dns: performance.timing.domainLookupEnd - performance.timing.domainLookupStart,
+          tcp: performance.timing.connectEnd - performance.timing.connectStart,
+          ttfb: performance.timing.responseStart - performance.timing.navigationStart,
+          download: performance.timing.responseEnd - performance.timing.responseStart,
+          domInteractive: performance.timing.domInteractive - performance.timing.navigationStart,
+          domComplete: performance.timing.domComplete - performance.timing.navigationStart,
+        };
+        
+        // Send to analytics
+        if (window.analytics) {
+          window.analytics.track('Performance Metrics', perfData);
+        }
+      });
+    }
+  </script>
+  
+  <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+  <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+  <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+  
+  <title>MusicConnect - Discover Independent Artists</title>
+  
+  <!-- Non-critical CSS loaded asynchronously -->
+  <link rel="preload" href="/static/css/main.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/static/css/main.css"></noscript>
+</head>
+<body class="no-js">
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  
+  <!-- Loading state -->
+  <div class="app-loading" id="app-loading">
+    <div class="spinner"></div>
+  </div>
+  
+  <div id="root"></div>
+  
+  <!-- Deferred scripts -->
+  <script>
+    // Load service worker
+    if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.error('Service Worker registration failed:', err));
+      });
+    }
+    
+    // Prefetch on hover
+    let prefetched = new Set();
+    document.addEventListener('mouseover', (e) => {
+      const link = e.target.closest('a');
+      if (link && link.href && !prefetched.has(link.href)) {
+        const url = new URL(link.href);
+        if (url.origin === window.location.origin) {
+          const prefetchLink = document.createElement('link');
+          prefetchLink.rel = 'prefetch';
+          prefetchLink.href = link.href;
+          document.head.appendChild(prefetchLink);
+          prefetched.add(link.href);
+        }
+      }
+    });
+    
+    // Load analytics asynchronously
+    (function() {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.segment.com/analytics.js/v1/YOUR_WRITE_KEY/analytics.min.js';
+      script.async = true;
+      document.head.appendChild(script);
+    })();
+  </script>
+</body>
+</html>

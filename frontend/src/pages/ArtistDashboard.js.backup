@@ -13,17 +13,11 @@ import {
   CalendarDaysIcon,
   MusicalNoteIcon,
   CogIcon,
-  SparklesIcon,
-  ChatBubbleLeftEllipsisIcon,
-  CloudArrowUpIcon,
-  PhotoIcon,
-  VideoCameraIcon
+  SparklesIcon
 } from '@heroicons/react/24/outline';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Loading from '../components/ui/Loading';
-import MediaUploadModal from '../components/MediaUploadModal';
-import uploadService from '../services/uploadService';
 
 const ArtistDashboard = () => {
   const { user } = useAuth();
@@ -31,13 +25,9 @@ const ArtistDashboard = () => {
   const [recentContent, setRecentContent] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [uploadType, setUploadType] = useState('music');
-  const [myUploads, setMyUploads] = useState({ music: [], images: [], videos: [] });
 
   useEffect(() => {
     loadDashboardData();
-    loadMyUploads();
   }, []);
 
   const loadDashboardData = async () => {
@@ -120,24 +110,6 @@ const ArtistDashboard = () => {
     }
   };
 
-  const loadMyUploads = async () => {
-    try {
-      const uploads = await uploadService.getMyUploads();
-      setMyUploads(uploads);
-      
-      // Update recent content to include uploads
-      const allContent = [
-        ...uploads.music.map(m => ({ ...m, type: 'music' })),
-        ...uploads.images.map(i => ({ ...i, type: 'image' })),
-        ...uploads.videos.map(v => ({ ...v, type: 'video' }))
-      ].sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
-      
-      setRecentContent(allContent);
-    } catch (error) {
-      console.error('Error loading uploads:', error);
-    }
-  };
-
   const StatCard = ({ title, value, change, icon: Icon, color = 'purple' }) => (
     <Card>
       <Card.Body className="p-6">
@@ -162,48 +134,34 @@ const ArtistDashboard = () => {
     </Card>
   );
 
-  const ContentCard = ({ content }) => {
-    const getContentIcon = () => {
-      switch(content.type) {
-        case 'music':
-          return <MusicalNoteIcon className="h-8 w-8 text-white" />;
-        case 'image':
-          return <PhotoIcon className="h-8 w-8 text-white" />;
-        case 'video':
-          return <VideoCameraIcon className="h-8 w-8 text-white" />;
-        default:
-          return <MusicalNoteIcon className="h-8 w-8 text-white" />;
-      }
-    };
-
-    const getContentDate = () => {
-      const date = content.uploadDate || content.createdAt;
-      return new Date(date).toLocaleDateString();
-    };
-
-    return (
-      <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-        <div className="w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg flex items-center justify-center">
-          {getContentIcon()}
+  const ContentCard = ({ content }) => (
+    <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+      <div className="w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg flex items-center justify-center">
+        <MusicalNoteIcon className="h-8 w-8 text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h4 className="font-medium text-gray-900 truncate">{content.title}</h4>
+        <p className="text-sm text-gray-600 capitalize">{content.type}</p>
+        <p className="text-xs text-gray-500">
+          {new Date(content.createdAt).toLocaleDateString()}
+        </p>
+      </div>
+      <div className="flex space-x-4 text-sm text-gray-600">
+        <div className="flex items-center">
+          <EyeIcon className="h-4 w-4 mr-1" />
+          <span>{content.views || 0}</span>
         </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-gray-900 truncate">{content.title}</h4>
-          <p className="text-sm text-gray-600 capitalize">{content.type}</p>
-          <p className="text-xs text-gray-500">{getContentDate()}</p>
+        <div className="flex items-center">
+          <HeartIcon className="h-4 w-4 mr-1" />
+          <span>{content.likes || 0}</span>
         </div>
-        <div className="flex space-x-4 text-sm text-gray-600">
-          <div className="flex items-center">
-            <EyeIcon className="h-4 w-4 mr-1" />
-            <span>{content.views || content.plays || 0}</span>
-          </div>
-          <div className="flex items-center">
-            <HeartIcon className="h-4 w-4 mr-1" />
-            <span>{content.likes || 0}</span>
-          </div>
+        <div className="flex items-center">
+          <ShareIcon className="h-4 w-4 mr-1" />
+          <span>{content.shares || 0}</span>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -238,10 +196,7 @@ const ArtistDashboard = () => {
             </p>
           </div>
           <div className="flex space-x-3 mt-4 md:mt-0">
-            <Button 
-              className="flex items-center"
-              onClick={() => setUploadModalOpen(true)}
-            >
+            <Button className="flex items-center">
               <PlusIcon className="h-4 w-4 mr-2" />
               Upload Content
             </Button>
@@ -319,7 +274,7 @@ const ArtistDashboard = () => {
                       <p className="text-gray-600 mb-4">
                         Start uploading content to see your analytics
                       </p>
-                      <Button onClick={() => setUploadModalOpen(true)}>Upload Your First Content</Button>
+                      <Button>Upload Your First Content</Button>
                     </div>
                   </div>
                 )}
@@ -334,11 +289,9 @@ const ArtistDashboard = () => {
                     <MusicalNoteIcon className="h-5 w-5 mr-2" />
                     Recent Content
                   </Card.Title>
-                  <Link to="/media-library">
-                    <Button variant="outline" size="sm">
-                      Manage All
-                    </Button>
-                  </Link>
+                  <Button variant="outline" size="sm">
+                    Manage All
+                  </Button>
                 </div>
               </Card.Header>
               <Card.Body>
@@ -357,10 +310,7 @@ const ArtistDashboard = () => {
                     <p className="text-gray-600 mb-6">
                       Start sharing your music to engage with fans
                     </p>
-                    <Button 
-                      className="flex items-center"
-                      onClick={() => setUploadModalOpen(true)}
-                    >
+                    <Button className="flex items-center">
                       <PlusIcon className="h-4 w-4 mr-2" />
                       Upload Content
                     </Button>
@@ -512,42 +462,10 @@ const ArtistDashboard = () => {
                 <Card.Title>Quick Actions</Card.Title>
               </Card.Header>
               <Card.Body className="space-y-3">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Upload Content</p>
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start"
-                    onClick={() => {
-                      setUploadType('music');
-                      setUploadModalOpen(true);
-                    }}
-                  >
-                    <MusicalNoteIcon className="h-4 w-4 mr-2" />
-                    Upload Music
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start"
-                    onClick={() => {
-                      setUploadType('image');
-                      setUploadModalOpen(true);
-                    }}
-                  >
-                    <PhotoIcon className="h-4 w-4 mr-2" />
-                    Upload Images
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full justify-start"
-                    onClick={() => {
-                      setUploadType('video');
-                      setUploadModalOpen(true);
-                    }}
-                  >
-                    <VideoCameraIcon className="h-4 w-4 mr-2" />
-                    Upload Videos
-                  </Button>
-                </div>
+                <Button variant="outline" className="w-full justify-start">
+                  <PlusIcon className="h-4 w-4 mr-2" />
+                  Upload New Content
+                </Button>
                 <Button variant="outline" className="w-full justify-start">
                   <SparklesIcon className="h-4 w-4 mr-2" />
                   Create Exclusive Content
@@ -567,18 +485,6 @@ const ArtistDashboard = () => {
           </div>
         </div>
       </div>
-
-      {/* Upload Modal */}
-      <MediaUploadModal
-        isOpen={uploadModalOpen}
-        onClose={() => setUploadModalOpen(false)}
-        type={uploadType}
-        onUploadSuccess={(files) => {
-          console.log('Upload successful:', files);
-          loadMyUploads();
-          setUploadModalOpen(false);
-        }}
-      />
     </div>
   );
 };

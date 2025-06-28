@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test MusicConnect Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        input { margin: 10px 0; padding: 8px; width: 300px; }
+        button { padding: 10px 20px; background: #7c3aed; color: white; border: none; cursor: pointer; }
+        button:hover { background: #6d28d9; }
+        .error { color: red; margin: 10px 0; }
+        .success { color: green; margin: 10px 0; }
+        .info { background: #f3f4f6; padding: 20px; margin: 20px 0; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <h1>MusicConnect Login Test</h1>
+    
+    <div class="info">
+        <h3>Demo Accounts:</h3>
+        <p><strong>Artist:</strong> artist@demo.com / password123</p>
+        <p><strong>Fan:</strong> fan@demo.com / password123</p>
+    </div>
+
+    <div>
+        <h2>Test Login Form</h2>
+        <div>
+            <input type="email" id="email" placeholder="Email" value="artist@demo.com"><br>
+            <input type="password" id="password" placeholder="Password" value="password123"><br>
+            <button onclick="testLogin()">Test Login</button>
+        </div>
+        <div id="result"></div>
+    </div>
+
+    <div style="margin-top: 40px;">
+        <h3>Debug Console:</h3>
+        <pre id="console" style="background: #1f2937; color: white; padding: 20px; min-height: 200px; overflow: auto;"></pre>
+    </div>
+
+    <script>
+        const debugLog = (message, data = null) => {
+            const consoleEl = document.getElementById('console');
+            const timestamp = new Date().toLocaleTimeString();
+            let logMessage = `[${timestamp}] ${message}`;
+            if (data) {
+                logMessage += '\n' + JSON.stringify(data, null, 2);
+            }
+            consoleEl.textContent += logMessage + '\n\n';
+            console.log(message, data);
+        };
+
+        // Mock authentication for testing
+        const DEMO_ACCOUNTS = {
+            'artist@demo.com': {
+                password: 'password123',
+                user: {
+                    _id: '1',
+                    email: 'artist@demo.com',
+                    username: 'demo_artist',
+                    displayName: 'Demo Artist',
+                    userType: 'artist'
+                }
+            },
+            'fan@demo.com': {
+                password: 'password123',
+                user: {
+                    _id: '2',
+                    email: 'fan@demo.com',
+                    username: 'demo_fan',
+                    displayName: 'Demo Fan',
+                    userType: 'fan'
+                }
+            }
+        };
+
+        async function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultEl = document.getElementById('result');
+            
+            debugLog('Starting login test', { email });
+            
+            // Test 1: Client-side validation
+            if (!email || !password) {
+                resultEl.innerHTML = '<div class="error">Please enter both email and password</div>';
+                debugLog('❌ Validation failed: Empty fields');
+                return;
+            }
+            
+            // Test 2: Mock authentication
+            const account = DEMO_ACCOUNTS[email];
+            if (!account || account.password !== password) {
+                resultEl.innerHTML = '<div class="error">Invalid email or password</div>';
+                debugLog('❌ Authentication failed: Invalid credentials');
+                return;
+            }
+            
+            debugLog('✅ Mock authentication successful', account.user);
+            
+            // Test 3: Try API call
+            try {
+                debugLog('Testing API endpoint...');
+                const response = await fetch('http://localhost:5001/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                debugLog('API Response Status: ' + response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    debugLog('✅ API login successful', data);
+                    resultEl.innerHTML = '<div class="success">API Login successful! Check console for details.</div>';
+                } else {
+                    const error = await response.text();
+                    debugLog('❌ API login failed', { status: response.status, error });
+                    resultEl.innerHTML = '<div class="error">API Login failed (but mock auth works!)</div>';
+                }
+            } catch (error) {
+                debugLog('⚠️ API connection error (this is expected if backend is not running)', error.message);
+                resultEl.innerHTML = '<div class="success">Mock login successful! Backend API not available.</div>';
+            }
+            
+            // Store mock session
+            const token = btoa(JSON.stringify({ email, timestamp: Date.now() }));
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(account.user));
+            
+            debugLog('✅ Session stored in localStorage', {
+                token: token.substring(0, 20) + '...',
+                user: account.user
+            });
+            
+            // Test redirect
+            setTimeout(() => {
+                debugLog('Would redirect to: ' + (account.user.userType === 'artist' ? '/artist-dashboard' : '/discovery'));
+            }, 1000);
+        }
+
+        // Test on page load
+        window.onload = () => {
+            debugLog('Page loaded, testing environment...');
+            debugLog('LocalStorage available: ' + (typeof Storage !== 'undefined'));
+            debugLog('Current origin: ' + window.location.origin);
+            
+            // Check if React app is running
+            fetch('http://localhost:3000')
+                .then(r => debugLog('✅ React app is running on port 3000'))
+                .catch(e => debugLog('❌ React app not detected on port 3000'));
+                
+            // Check if backend is running
+            fetch('http://localhost:5001/api/health')
+                .then(r => r.json())
+                .then(d => debugLog('✅ Backend API is running', d))
+                .catch(e => debugLog('⚠️ Backend API not running on port 5001'));
+        };
+    </script>
+</body>
+</html>

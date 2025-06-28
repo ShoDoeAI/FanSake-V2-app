@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Connection Test</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Supabase Connection Test</h1>
+    <div id="status">Testing connection...</div>
+    <div id="details"></div>
+
+    <script>
+        // These should be replaced by your actual environment variables in production
+        const SUPABASE_URL = 'https://tilngqwmdmhetvfyomcn.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpbG5ncXdtZG1oZXR2ZnlvbWNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA5ODQ2MDUsImV4cCI6MjA2NjU2MDYwNX0.DHE1uoclzmZgzKrwnMW-rPWMmS_XOKNyFuzBMLW2I6I';
+
+        async function testConnection() {
+            const statusEl = document.getElementById('status');
+            const detailsEl = document.getElementById('details');
+
+            try {
+                const { createClient } = supabase;
+                const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                
+                // Test auth connection
+                const { data: session, error: sessionError } = await supabaseClient.auth.getSession();
+                
+                if (sessionError) {
+                    statusEl.innerHTML = '❌ Connection failed';
+                    detailsEl.innerHTML = `<p style="color: red;">Error: ${sessionError.message}</p>`;
+                } else {
+                    statusEl.innerHTML = '✅ Connection successful!';
+                    detailsEl.innerHTML = `
+                        <p style="color: green;">Supabase is connected and ready.</p>
+                        <p>Session: ${session.session ? 'Active' : 'No active session'}</p>
+                        <p>You can now use Supabase authentication.</p>
+                    `;
+                }
+            } catch (error) {
+                statusEl.innerHTML = '❌ Connection failed';
+                detailsEl.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        testConnection();
+    </script>
+</body>
+</html>

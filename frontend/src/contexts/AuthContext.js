@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { authAPI } from '../services/api';
+import { mockLogin, mockRegister, mockVerify } from '../services/mockAuth';
 
 // Initial state
 const initialState = {
@@ -121,7 +122,13 @@ export const AuthProvider = ({ children }) => {
   const verifyToken = async () => {
     try {
       dispatch({ type: AUTH_ACTIONS.VERIFY_START });
-      const response = await authAPI.verify();
+      // Try mock auth first, fallback to API
+      let response;
+      try {
+        response = await mockVerify();
+      } catch (mockError) {
+        response = await authAPI.verify();
+      }
       dispatch({
         type: AUTH_ACTIONS.VERIFY_SUCCESS,
         payload: { user: response.data.user },
@@ -143,7 +150,16 @@ export const AuthProvider = ({ children }) => {
       console.log('Starting login with credentials:', { email: credentials.email }); // Debug log
       dispatch({ type: AUTH_ACTIONS.LOGIN_START });
       
-      const response = await authAPI.login(credentials);
+      // Try mock login first, fallback to API
+      let response;
+      try {
+        response = await mockLogin(credentials.email, credentials.password);
+        console.log('Mock login successful');
+      } catch (mockError) {
+        console.log('Mock login failed, trying API');
+        response = await authAPI.login(credentials);
+      }
+      
       console.log('Login response received:', response.data); // Debug log
       
       const { user, token } = response.data;

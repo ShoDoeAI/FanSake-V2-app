@@ -1,23 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/SupabaseAuthContext';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Card from '../components/ui/Card';
 
-const Login = () => {
-  const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
+const SupabaseLogin = () => {
+  const { user, loading, error, signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // Debug logging
-  console.log('Login component rendered', {
-    isAuthenticated,
-    isLoading,
-    hasLoginFunction: !!login,
-    location: location.pathname
-  });
   
   const [formData, setFormData] = useState({
     email: '',
@@ -28,16 +20,11 @@ const Login = () => {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated && !isLoading) {
+    if (user && !loading) {
       const from = location.state?.from?.pathname || '/discovery';
       navigate(from, { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate, location.state?.from?.pathname]);
-
-  // Clear errors when component mounts or form changes
-  useEffect(() => {
-    clearError();
-  }, [clearError]);
+  }, [user, loading, navigate, location.state?.from?.pathname]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -82,85 +69,29 @@ const Login = () => {
     setIsSubmitting(true);
     
     try {
-      console.log('Attempting login with:', { email: formData.email }); // Debug log
-      
-      // Add fallback authentication for demo accounts
-      const DEMO_ACCOUNTS = {
-        'artist@demo.com': { password: 'password123', userType: 'artist' },
-        'fan@demo.com': { password: 'password123', userType: 'fan' }
-      };
-      
-      const demoAccount = DEMO_ACCOUNTS[formData.email];
-      
-      if (demoAccount && demoAccount.password === formData.password) {
-        console.log('Demo account login successful');
-        
-        // Create mock user object
-        const mockUser = {
-          _id: formData.email === 'artist@demo.com' ? '1' : '2',
-          email: formData.email,
-          username: formData.email === 'artist@demo.com' ? 'demo_artist' : 'demo_fan',
-          displayName: formData.email === 'artist@demo.com' ? 'Demo Artist' : 'Demo Fan',
-          userType: demoAccount.userType
-        };
-        
-        // Store in localStorage
-        const mockToken = btoa(JSON.stringify({ email: formData.email, timestamp: Date.now() }));
-        localStorage.setItem('token', mockToken);
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        
-        // Update auth context manually
-        if (login) {
-          const result = await login({
-            email: formData.email,
-            password: formData.password,
-          });
-          
-          if (result.success) {
-            const redirectPath = demoAccount.userType === 'artist' ? '/artist-dashboard' : '/discovery';
-            const from = location.state?.from?.pathname || redirectPath;
-            navigate(from, { replace: true });
-            return;
-          }
-        }
-        
-        // Direct navigation if auth context fails
-        const redirectPath = demoAccount.userType === 'artist' ? '/artist-dashboard' : '/discovery';
-        navigate(redirectPath, { replace: true });
-        return;
-      }
-      
-      // Try normal login if not demo account
-      const result = await login({
+      const { data, error } = await signIn({
         email: formData.email,
         password: formData.password,
       });
       
-      console.log('Login result:', result); // Debug log
-      
-      if (result.success) {
-        // Redirect based on user type
-        let redirectPath = '/discovery'; // Default for fans
-        
-        if (result.user && result.user.userType === 'artist') {
-          redirectPath = '/artist-dashboard';
-        }
-        
+      if (error) {
+        setFormErrors({ email: error.message });
+      } else {
+        // Redirect based on user metadata
+        const userType = data.user?.user_metadata?.userType || 'fan';
+        const redirectPath = userType === 'artist' ? '/artist-dashboard' : '/discovery';
         const from = location.state?.from?.pathname || redirectPath;
-        console.log('Redirecting to:', from); // Debug log
         navigate(from, { replace: true });
       }
     } catch (err) {
       console.error('Login error:', err);
-      
-      // Show error to user
-      setFormErrors({ email: 'Invalid email or password' });
+      setFormErrors({ email: 'An unexpected error occurred. Please try again.' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 flex items-center justify-center">
         <div className="text-center">
@@ -232,23 +163,6 @@ const Login = () => {
               {isSubmitting ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          
-          {/* Debug Helper */}
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                console.log('Debug: Quick login as artist');
-                setFormData({ email: 'artist@demo.com', password: 'password123' });
-                setTimeout(() => {
-                  document.querySelector('form').requestSubmit();
-                }, 100);
-              }}
-              className="text-xs text-purple-600 hover:text-purple-700 underline"
-            >
-              Quick Login as Artist (Debug)
-            </button>
-          </div>
 
           {/* Footer Links */}
           <div className="mt-6 text-center space-y-2">
@@ -273,18 +187,14 @@ const Login = () => {
           </div>
         </Card>
 
-        {/* Demo Accounts Info */}
-        <Card className="p-6 bg-purple-50 border-purple-200">
-          <h3 className="text-sm font-medium text-purple-900 mb-3">
-            Demo Accounts
+        {/* Note about Supabase */}
+        <Card className="p-6 bg-blue-50 border-blue-200">
+          <h3 className="text-sm font-medium text-blue-900 mb-3">
+            Using Supabase Authentication
           </h3>
-          <div className="space-y-2 text-xs text-purple-800">
-            <div>
-              <strong>Artist:</strong> artist@demo.com / password123
-            </div>
-            <div>
-              <strong>Fan:</strong> fan@demo.com / password123
-            </div>
+          <div className="text-xs text-blue-800">
+            <p>This app now uses Supabase for authentication.</p>
+            <p className="mt-1">Please create an account or use existing Supabase credentials.</p>
           </div>
         </Card>
 
@@ -302,5 +212,4 @@ const Login = () => {
   );
 };
 
-export default Login;
-
+export default SupabaseLogin;
